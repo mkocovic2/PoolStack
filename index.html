@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>POOLSTACK</title>
+    <link rel="stylesheet" type="text/css" href="styles.css">
+</head>
+<body>
+    <div>
+        <img class="title" src="images/poolimg.png">
+    </div>
+    <div>
+        <h2 class="listText"><u>Currently Playing</u></h2>
+        <ul id="currentMatchList"></ul>
+        <h2 class="listText"><u>Waiting Queue</u></h2>
+        <ul id="queueList"></ul>
+        <form id="queueForm">
+            <input id="playerName" type="text" placeholder="Enter your name" class="playerInput">
+            <button id="queueButton" class="submitButton">Join Queue</button>
+        </form>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+        import { getDatabase, ref, set, get, remove, onValue } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyB7tcV_4nOiRgjvDO1AFwTiWaYlClZY0-w",
+            authDomain: "pooldatabase-31c8d.firebaseapp.com",
+            databaseURL: "https://pooldatabase-31c8d-default-rtdb.firebaseio.com/",
+            projectId: "pooldatabase-31c8d",
+            storageBucket: "pooldatabase-31c8d.appspot.com",
+            messagingSenderId: "409393612430",
+            appId: "1:409393612430:web:074118d4f2e05cae3cebdf",
+            measurementId: "G-6FRENS1DVQ"
+        }
+        
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        const currentMatchList = document.getElementById("currentMatchList");
+        const queueList = document.getElementById("queueList");
+        const queueForm = document.getElementById("queueForm");
+        const playerNameInput = document.getElementById("playerName");
+        const queueButton = document.getElementById("queueButton");
+
+        function addToQueue(playerName) {
+            const queueRef = ref(database, "queue/" + playerName); // Use playerName as the key
+            set(queueRef, { name: playerName, status: "waiting" })
+                .then(() => {
+                    console.log("Player added to queue successfully!");
+                    playerNameInput.value = "";
+                })
+                .catch((error) => {
+                    console.error("Error adding player to queue:", error);
+                });
+        }
+
+        function removeFromQueue(playerName) {
+            const queueRef = ref(database, "queue/" + playerName); // Use playerName as the key
+            remove(queueRef)
+                .then(() => {
+                    console.log("Player removed from queue successfully!");
+                })
+                .catch((error) => {
+                    console.error("Error removing player from queue:", error);
+                });
+        }
+
+        function movePlayerToCurrentMatch(playerName) {
+            const queueRef = ref(database, "queue/" + playerName);
+            const currentMatchRef = ref(database, "currentMatch/" + playerName);
+
+            get(queueRef)
+                .then((snapshot) => {
+                    const playerData = snapshot.val();
+                    if (playerData) {
+                        set(currentMatchRef, playerData)
+                            .then(() => {
+                                removeFromQueue(playerName);
+                                console.log("Player moved to currentMatch successfully!");
+                            })
+                            .catch((error) => {
+                                console.error("Error moving player to currentMatch:", error);
+                            });
+                    }
+                })
+                .catch((error) => {
+                    console.error("Error getting player data from queue:", error);
+                });
+        }
+
+        function removePlayer(playerName) {
+            const currentMatchRef = ref(database, "currentMatch/" + playerName);
+            remove(currentMatchRef)
+                .then(() => {
+                    console.log("Player removed from currentMatch successfully!");
+                })
+                .catch((error) => {
+                    console.error("Error removing player from currentMatch:", error);
+                });
+        }
+
+        function createRemoveButton(playerName) {
+            const removeButton = document.createElement("button");
+            removeButton.textContent = "Remove Player";
+            removeButton.classList.add("move-button"); // Add the .move-button class
+            removeButton.addEventListener("click", () => {
+                if (confirm("Are you sure you want to remove yourself from the current match?")) {
+                    removePlayer(playerName);
+                }
+            });
+            return removeButton;
+        }
+
+        queueButton.addEventListener("click", function (e) {
+            e.preventDefault();
+            const playerName = playerNameInput.value;
+            if (playerName.trim() !== "") {
+                addToQueue(playerName);
+            }
+        });
+
+        function updateQueueListRealtime() {
+            const queueRef = ref(database, "queue");
+            onValue(queueRef, (snapshot) => {
+                queueList.innerHTML = "";
+                const queueData = snapshot.val();
+                if (queueData) {
+                    for (const playerName in queueData) {
+                        const playerData = queueData[playerName];
+                        const playerStatus = playerData.status;
+
+                        const listItem = document.createElement("li");
+                        listItem.textContent = `${playerName} (Status: ${playerStatus})`;
+
+                        const moveButton = document.createElement("button");
+                        moveButton.textContent = "Move to Match";
+
+                        moveButton.classList.add("move-button");
+
+                        moveButton.addEventListener("click", () => {
+                            movePlayerToCurrentMatch(playerName);
+                        });
+
+                        listItem.appendChild(moveButton);
+                        queueList.appendChild(listItem);
+                    }
+                }
+            });
+        }
+
+        function updateCurrentMatchListRealtime() {
+            const currentMatchRef = ref(database, "currentMatch");
+            onValue(currentMatchRef, (snapshot) => {
+                currentMatchList.innerHTML = "";
+                const currentMatchData = snapshot.val();
+                if (currentMatchData) {
+                    for (const playerName in currentMatchData) {
+                        const listItem = document.createElement("li");
+                        listItem.textContent = `${playerName}`;
+
+                        if (playerName !== "Player 1" && playerName !== "Player 2") {
+                            const removeButton = createRemoveButton(playerName);
+                            listItem.appendChild(removeButton);
+                        }
+
+                        currentMatchList.appendChild(listItem);
+                    }
+                }
+            });
+        }
+
+        updateQueueListRealtime();
+        updateCurrentMatchListRealtime();
+    </script>
+</body>
+</html>
